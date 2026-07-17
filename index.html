@@ -36,11 +36,14 @@ body{background:var(--bg);color:var(--t);font-family:var(--fn);min-height:100vh;
 <body>
   <div class="logo">Horror corridor <span>· 試玩</span></div>
   <div class="stage">
+    <div id="endOverlay" style="display:none;position:absolute;inset:0;z-index:100;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center;flex-direction:column;gap:20px">
+      <div id="endText" style="color:#fff;font-size:clamp(16px,4vw,28px);text-align:center;line-height:1.8;letter-spacing:0.1em;text-shadow:0 0 20px rgba(255,100,100,0.8);padding:20px;font-family:serif"></div>
+    </div>
     <div class="title-bar"><span id="tBar">－</span><span class="node-id" id="nodeIdBar"></span></div>
     <button class="rec-btn" id="recBtn"><span class="dot"></span><span id="recLabel">錄影</span></button>
     <button class="bgm-btn" id="bgmBtn" title="背景音樂">🔇</button>
-    <video id="vidA" playsinline webkit-playsinline muted></video>
-    <video id="vidB" playsinline webkit-playsinline muted></video>
+    <video id="vidA" playsinline muted crossorigin="anonymous"></video>
+    <video id="vidB" playsinline muted crossorigin="anonymous"></video>
     <canvas id="recCanvas" style="display:none"></canvas>
     <div class="empty" id="emptyMsg" style="display:none">這個方向還沒有記憶…</div>
     <div class="grid">
@@ -678,9 +681,155 @@ function findEdge(from,key){
 function refreshButtons(){
   Object.entries(btns).forEach(([k,b])=>{
     const has=!!findEdge(curNode,k)
-    b.disabled=!has
+    b.disabled=!has||(gamePhase==='retreat'&&k!=='E')||(gamePhase==='end'&&k!=='E')
   })
   nodeIdBar.textContent=curNode
+}
+
+// ── 遊戲狀態 ──
+let gamePhase='normal' // normal / detour / retreat / end
+let detourCount=0
+let detourTriggered=false
+let isAutoPlaying=false
+let noren1stVisit=true // 第一次到門簾=迂迴，第二次=結局
+
+// 節點深度（W方向）
+const nodeDepth={
+  'node_00':0,'node_01':1,'node_02':2,'node_03':3,'node_04':4,
+  'node_05':5,'node_06':6,'node_07':7,'node_08':8,'node_09':9,
+  'node_10':10,'node_11':11,'node_12':12,'node_13':13,'node_14':14,
+  'node_15':15,'node_16':16,'node_17':17,'node_18':18,'node_19':19
+}
+
+// 自動播放序列（R迂迴 or 強制退回）
+function autoPlaySeq(seq, onDone, speed=1.0){
+  if(isAutoPlaying)return
+  isAutoPlaying=true
+  let i=0
+  function next(){
+    if(i>=seq.length){isAutoPlaying=false;if(onDone)onDone();return}
+    const k=seq[i++]
+    const edge=findEdge(curNode,k)
+    if(!edge){next();return}
+    playAuto(k,next,speed)
+  }
+  next()
+}
+
+// 自動播放單段，播完執行 callback
+function playAuto(key, onDone, speed=1.0){
+  const edge=findEdge(curNode,key)
+  if(!edge){if(onDone)onDone();return}
+  emptyMsg.style.display='none'
+  tBar.textContent=edge.title
+  curKey=key
+  crossfadeTo(edge,{
+    loop:false,
+    onEnded:()=>{
+      curNode=edge.to
+      refreshButtons()
+      if(onDone)onDone()
+    }
+  })
+  // 套用速度
+  const activeVid=layers[activeIdx]
+  if(activeVid) activeVid.playbackRate=speed
+  curNode=edge.to
+  refreshButtons()
+}
+
+// 隨機迂迴：R → B → B → R → 繼續
+function triggerDetour(onDone){
+  gamePhase='detour'
+  detourCount++
+  const bCount=2+Math.floor(Math.random()*2) // 2~3段B
+  const seq=['R',...Array(bCount).fill('B'),'R']
+  startFlicker(seq.length*1500) // 閃爍持續整個迂迴過程
+  autoPlaySeq(seq,()=>{
+    stopFlicker()
+    gamePhase='normal'
+    if(onDone)onDone()
+  })
+}
+
+// 強制退回到 node_00，然後結局
+// 第一次到門簾：強制拉回 node_02，快速播 B
+function triggerNorenDetour(){
+  gamePhase='retreat' // 玩家無法操作
+  refreshButtons()
+  startFlicker(99999)
+  // 快速連 B 直到回到 node_02
+  function stepBack(){
+    const depth=nodeDepth[curNode]||0
+    if(depth<=2||!findEdge(curNode,'B')){
+      // 到 node_02 了，釋放控制讓玩家繼續
+      stopFlicker()
+      gamePhase='normal'
+      refreshButtons()
+      // 播 idle
+      const idleEdge=findEdge(curNode,'E')
+      if(idleEdge){curKey='E';tBar.textContent=idleEdge.title;crossfadeTo(idleEdge,{loop:true})}
+      return
+    }
+    playAuto('B', stepBack, 2.5) // B 段加速 2.5x
+  }
+  stepBack()
+}
+
+function triggerRetreat(){
+  gamePhase='retreat'
+  refreshButtons()
+  startFlicker(99999) // 退回全程閃爍
+  function stepBack(){
+    if(curNode==='node_00'||!findEdge(curNode,'B')){
+      stopFlicker()
+      showEnding()
+      return
+    }
+    playAuto('B', stepBack, 3.0) // 最終退回更快
+  }
+  stepBack()
+}
+
+// 閃爍效果（迂迴時觸發）
+function startFlicker(duration=3000){
+  const stage=document.querySelector('.stage')
+  const overlay=document.createElement('div')
+  overlay.id='flickerLayer'
+  overlay.style.cssText='position:absolute;inset:0;z-index:50;background:black;pointer-events:none;opacity:0;transition:opacity 0.05s'
+  stage.appendChild(overlay)
+  let start=Date.now()
+  function flick(){
+    if(Date.now()-start>duration){
+      overlay.remove()
+      return
+    }
+    overlay.style.opacity=Math.random()<0.3?(Math.random()*0.7+0.1).toFixed(2):'0'
+    setTimeout(flick, 50+Math.random()*150)
+  }
+  flick()
+}
+
+function stopFlicker(){
+  const f=document.getElementById('flickerLayer')
+  if(f)f.remove()
+}
+
+// 結局畫面
+function showEnding(){
+  gamePhase='end'
+  refreshButtons()
+  const overlay=document.getElementById('endOverlay')
+  const txt=document.getElementById('endText')
+  overlay.style.display='flex'
+  // 逐字顯示
+  const msg='你覺得能⋯\n你能逃得了?'
+  let i=0
+  txt.textContent=''
+  const timer=setInterval(()=>{
+    if(i>=msg.length){clearInterval(timer);return}
+    txt.textContent+=msg[i++]
+  },120)
 }
 
 // ── 雙層 video 交叉淡化（JS 驅動，opacity 數值同步給錄影用的 canvas）──
@@ -730,36 +879,56 @@ function crossfadeTo(edge,{loop=false,onEnded=null}={}){
 
   next.loop=loop&&!edge.reverseVideo
   next.onended=null
-  next.setAttribute('playsinline','')
-  next.setAttribute('webkit-playsinline','')
   next.src=edge.url
 
-  // iOS Safari/WebKit 要求 video.play() 必須在使用者手勢（點擊）的同一個
-  // 呼叫堆疊裡「同步」執行，才會被信任為使用者主動要求播放。
-  // 舊寫法把 play() 包在 canplay 事件監聽器裡才呼叫，canplay 是非同步觸發的，
-  // 跟點擊動作在時間軸上已經斷開，iOS 會直接靜默拒絕播放（不報錯，純黑畫面）。
-  // 修法：play() 立刻同步呼叫；canplay 只保留來控制「淡入動畫」的時機，
-  // 不再拿它來 gate 住 play() 本身。
-  if(!edge.reverseVideo){
-    next.currentTime=0
-    next.play().catch(()=>{})
-    if(onEnded)next.onended=onEnded
-  }
-
-  const doFade=()=>{
+  const doSwap=()=>{
     if(edge.reverseVideo){
       next.pause()
       playReverse(next,onEnded||null)
+    }else{
+      next.currentTime=0
+      // W 條目根據節點深度設播放速度，越後面越快
+      if(edge.key==='W'){
+        const speedMap={
+          'node_00→node_01':1.0,
+          'node_01→node_02':1.5,
+          'node_02→node_03':2.0,
+          'node_03→node_04':2.2,
+          'node_04→node_05':2.4,
+          'node_05→node_06':2.6,
+          'node_06→node_07':2.8,
+          'node_07→node_08':3.0,
+          'node_08→node_09':3.2,
+          'node_09→node_10':3.4,
+          'node_10→node_11':3.6,
+          'node_11→node_12':3.8,
+          'node_12→node_13':4.0,
+          'node_13→node_14':4.0,
+          'node_14→node_15':4.0,
+          'node_15→node_16':4.0,
+          'node_16→node_17':4.0,
+          'node_17→node_18':4.0,
+          'node_18→node_19':4.0,
+        }
+        const edgeKey=`${edge.from}→${edge.to}`
+        next.playbackRate=speedMap[edgeKey]||1.0
+      } else {
+        next.playbackRate=1.0
+      }
+      next.play().catch(()=>{})
+      if(onEnded)next.onended=onEnded
     }
     animateFade(activeIdx,nextIdx)
     activeIdx=nextIdx
   }
 
-  if(next.readyState>=2){doFade()}
-  else{next.addEventListener('canplay',doFade,{once:true})}
+  if(next.readyState>=2){doSwap()}
+  else{next.addEventListener('canplay',doSwap,{once:true})}
 }
 
+let playCooldown=false // 防止按住W連續觸發
 function play(key){
+  if(playCooldown&&key==='W')return // W 冷卻中
   const edge=findEdge(curNode,key)
   if(!edge){
     emptyMsg.style.display='flex'
@@ -771,12 +940,53 @@ function play(key){
   curKey=key
   const isIdleLoop=(edge.from===edge.to&&key==='E')
 
+  // R 鍵隨機左右轉
+  if(key==='R'&&Math.random()<0.5){
+    // 找 turn_left 版本（用 reverseVideo 反轉同一段影片）
+    edge.reverseVideo=!edge.reverseVideo
+  }
+
   crossfadeTo(edge,{
     loop:isIdleLoop,
     onEnded: isIdleLoop ? null : ()=>{
-      if(curKey!==key)return // 播放中途玩家已經切了別的方向，不要搶播
+      if(curKey!==key)return
       curNode=edge.to
       refreshButtons()
+
+      // W 播完啟動冷卻，防止按住不放連飛
+      if(key==='W'){
+        playCooldown=true
+        setTimeout(()=>{playCooldown=false},500)
+      }
+
+      // W 條目：判斷是否觸發迂迴或門簾結局
+      if(key==='W'&&gamePhase==='normal'){
+        const depth=nodeDepth[curNode]||0
+        // node_03~node_08 之間隨機觸發最多2次迂迴
+        const shouldDetour=depth>=2&&depth<=10&&detourCount<4&&Math.random()<0.7
+        // node_14 觸發門簾
+        const atNoren=curNode==='node_14'||depth>=14
+
+        if(atNoren){
+          if(noren1stVisit){
+            // 第一次：強制迂迴回 node_02
+            noren1stVisit=false
+            setTimeout(()=>triggerNorenDetour(),800)
+          } else {
+            // 第二次：直接退回結局
+            setTimeout(()=>triggerRetreat(),800)
+          }
+          return
+        } else if(shouldDetour&&!isAutoPlaying){
+          triggerDetour(()=>{
+            // 迂迴結束後回 idle
+            const idleEdge=findEdge(curNode,'E')
+            if(idleEdge){curKey='E';tBar.textContent=idleEdge.title;crossfadeTo(idleEdge,{loop:true})}
+          })
+          return
+        }
+      }
+
       const idleEdge=findEdge(curNode,'E')
       if(idleEdge){
         curKey='E'
@@ -794,10 +1004,17 @@ function play(key){
 }
 
 Object.entries(btns).forEach(([k,b])=>{
-  b.addEventListener('click',()=>{tryAutoStartBgm();play(k)})
+  b.addEventListener('click',()=>{
+    if(gamePhase==='detour'||gamePhase==='retreat'||gamePhase==='end')return
+    tryAutoStartBgm();play(k)
+  })
 })
 window.addEventListener('keydown',e=>{
   const k=e.key.toUpperCase()
+  if(gamePhase==='detour'||gamePhase==='retreat'||gamePhase==='end'){
+    if(k==='E')tryAutoStartBgm() // 只有E鍵在結局還能觸發bgm
+    return // 其他全部無效
+  }
   if(btns[k]&&!btns[k].disabled){tryAutoStartBgm();play(k)}
 })
 
