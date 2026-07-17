@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Horror corridor · 試玩</title>
+<link rel="icon" href="data:,">
+<style>
+:root{--bg:#0a0a0a;--s:#111;--s2:#181818;--bd:#222;--bd2:#2a2a2a;--t:#e8e8e8;--t2:#888;--t3:#444;--ac:#7eb8a4;--ac2:#4a8a74;--rec:#c46a6a;--fn:-apple-system,sans-serif;--mo:'SF Mono','Fira Code',monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--t);font-family:var(--fn);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:20px}
+.logo{font-size:15px;font-weight:600;color:var(--ac);letter-spacing:.05em}
+.logo span{color:var(--t2);font-weight:400}
+.stage{width:min(90vw,420px);aspect-ratio:9/16;background:var(--s);border:1px solid var(--bd2);border-radius:10px;overflow:hidden;position:relative}
+.stage video{width:100%;height:100%;object-fit:cover;display:block;position:absolute;inset:0}
+.stage .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--t2);font-size:13px;text-align:center;padding:20px;z-index:2;background:rgba(0,0,0,.4);line-height:1.8}
+.title-bar{position:absolute;top:0;left:0;right:0;padding:9px 12px;font-size:11px;color:var(--t2);background:linear-gradient(to bottom,rgba(0,0,0,.6),transparent);z-index:3;display:flex;justify-content:space-between}
+.title-bar .node-id{color:var(--t3);font-family:var(--mo);font-size:9px}
+.rec-btn{position:absolute;top:8px;right:8px;z-index:4;background:rgba(0,0,0,.5);border:1px solid var(--bd2);border-radius:14px;color:var(--t2);font-size:10px;padding:5px 10px;cursor:pointer;display:flex;align-items:center;gap:5px}
+.rec-btn .dot{width:7px;height:7px;border-radius:50%;background:var(--rec)}
+.rec-btn.on{background:rgba(196,106,106,.2);border-color:var(--rec);color:#f0b0b0}
+.rec-btn.on .dot{animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.2}}
+.bgm-btn{position:absolute;top:8px;left:8px;z-index:4;background:rgba(0,0,0,.5);border:1px solid var(--bd2);border-radius:14px;color:var(--t2);font-size:13px;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.bgm-btn.on{border-color:var(--ac2);color:var(--ac)}
+.grid{position:absolute;left:8px;bottom:8px;z-index:5;display:grid;grid-template-columns:repeat(3,48px);gap:5px}
+.wbtn{background:rgba(17,17,17,.6);backdrop-filter:blur(2px);border:1px solid rgba(255,255,255,.12);border-radius:6px;color:var(--ac);font-family:var(--mo);font-size:9px;padding:7px 0;cursor:pointer;line-height:1.4;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+.wbtn:active{border-color:var(--ac2);background:rgba(19,32,24,.85)}
+.wbtn:hover{border-color:var(--ac2);background:rgba(19,32,24,.85)}
+.wbtn:disabled{color:var(--t3);cursor:not-allowed;background:rgba(17,17,17,.3);opacity:.35;border-color:rgba(255,255,255,.05)}
+.wbtn.wide{grid-column:1/4}
+.wbtn.ph{visibility:hidden;pointer-events:none}
+.hint{font-size:10px;color:var(--t3);text-align:center;max-width:320px;line-height:1.6}
+</style>
+</head>
+<body>
+  <div class="logo">Horror corridor <span>· 試玩</span></div>
+  <div class="stage">
+    <div id="endOverlay" style="display:none;position:absolute;inset:0;z-index:100;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center;flex-direction:column;gap:20px">
+      <div id="endText" style="color:#fff;font-size:clamp(16px,4vw,28px);text-align:center;line-height:1.8;letter-spacing:0.1em;text-shadow:0 0 20px rgba(255,100,100,0.8);padding:20px;font-family:serif"></div>
+    </div>
+    <div class="title-bar"><span id="tBar">－</span><span class="node-id" id="nodeIdBar"></span></div>
+    <button class="rec-btn" id="recBtn"><span class="dot"></span><span id="recLabel">錄影</span></button>
+    <button class="bgm-btn" id="bgmBtn" title="背景音樂">🔇</button>
+    <video id="vidA" playsinline muted crossorigin="anonymous"></video>
+    <video id="vidB" playsinline muted crossorigin="anonymous"></video>
+    <canvas id="recCanvas" style="display:none"></canvas>
+    <div class="empty" id="emptyMsg" style="display:none">這個方向還沒有記憶…</div>
+    <div class="grid">
+      <button class="wbtn ph" data-k="Q" disabled tabindex="-1">－</button>
+      <button class="wbtn" data-k="W">↑ 前進<br>W</button>
+      <button class="wbtn" data-k="E">⏸ 待機<br>E</button>
+      <button class="wbtn" data-k="A">← 左移<br>A</button>
+      <button class="wbtn" data-k="S">↓ 後退<br>S</button>
+      <button class="wbtn" data-k="D">→ 右移<br>D</button>
+      <button class="wbtn wide" data-k="R">↻ 轉身 R</button>
+    </div>
+  </div>
+  <audio id="bgm" src="music/bgm.mp3" loop preload="auto"></audio>
+  <div id="recErr" style="font-size:10px;color:var(--rec);text-align:center;max-width:320px;min-height:14px"></div>
+  <div class="hint">動作播完會自動淡回待機。灰掉的方向代表這個節點還沒有那個方向的記憶。左上角🔇為背景音樂開關，第一次按方向鍵時會自動嘗試播放。虛擬按鍵疊加在畫面左下角方便單手操作。需要 ComfyUI（本機或同網段）持續運行才能載入影片；若要穩定錄影，建議改用「📦 匯出可攜包(ZIP)」版本。</div>
+
+<script>
+const GRAPH = {
+  "nodes": [
+    "node_00",
+    "node_01",
+    "node_02",
+    "node_03",
+    "node_04",
+    "node_05",
+    "node_06",
+    "node_07",
+    "node_08",
+    "node_09",
+    "node_10",
+    "node_11",
+    "node_12",
+    "node_13",
+    "node_14",
+    "node_15",
+    "node_16",
+    "node_17"
+  ],
+  "start": "node_00",
+  "edges": [
+    {
+      "from": "node_00",
+      "to": "node_00",
+      "key": "E",
+      "url": "videos/seg_001.mp4",
+      "title": "E，idle，日常待機",
+      "reversible": true
+    },
+    {
+      "from": "node_00",
+      "to": "node_01",
+      "key": "W",
+      "url": "videos/seg_002.mp4",
+      "title": "W，move，往簾子走近停電",
+      "reversible": true
+    },
+    {
+      "from": "node_00",
+      "to": "node_00",
+      "key": "R",
+      "url": "videos/seg_003.mp4",
+      "title": "R，turn，停電後強制轉身",
+      "reversible": true
+    },
+    {
+      "from": "node_01",
+      "to": "node_01",
+      "key": "E",
+      "url": "videos/seg_004.mp4",
+      "title": "E，idle，停電後僵立",
+      "reversible": true
+    },
+    {
+      "from": "node_01",
+      "to": "node_02",
+      "key": "W",
+      "url": "videos/seg_005.mp4",
+      "title": "W，move，開始奔跑",
+      "reversible": true
+    },
+    {
+      "from": "node_01",
+      "to": "node_01",
+      "key": "S",
+      "url": "videos/seg_006.mp4",
+      "title": "B，back，踉蹌後退",
+      "reversible": true
+    },
+    {
+      "from": "node_02",
+      "to": "node_02",
+      "key": "E",
+      "url": "videos/seg_007.mp4",
+      "title": "E，idle，跑中短暫停頓",
+      "reversible": true
+    },
+    {
+      "from": "node_02",
+      "to": "node_03",
+      "key": "W",
+      "url": "videos/seg_008.mp4",
+      "title": "W，move，加速衝刺",
+      "reversible": true
+    },
+    {
+      "from": "node_02",
+      "to": "node_02",
+      "key": "R",
+      "url": "videos/seg_009.mp4",
+      "title": "R，turn，跑中回頭確認",
+      "reversible": true
+    },
+    {
+      "from": "node_03",
+      "to": "node_03",
+      "key": "E",
+      "url": "videos/seg_010.mp4",
+      "title": "E，idle，加速段喘氣",
+      "reversible": true
+    },
+    {
+      "from": "node_03",
+      "to": "node_04",
+      "key": "W",
+      "url": "videos/seg_011.mp4",
+      "title": "W，move，全速進入扭曲區",
+      "reversible": true
+    },
+    {
+      "from": "node_03",
+      "to": "node_03",
+      "key": "S",
+      "url": "videos/seg_012.mp4",
+      "title": "B，back，扭曲區踉蹌",
+      "reversible": true
+    },
+    {
+      "from": "node_04",
+      "to": "node_04",
+      "key": "E",
+      "url": "videos/seg_013.mp4",
+      "title": "E，idle，扭曲走廊待機",
+      "reversible": true
+    },
+    {
+      "from": "node_04",
+      "to": "node_05",
+      "key": "W",
+      "url": "videos/seg_014.mp4",
+      "title": "W，move，衝入門列區",
+      "reversible": true
+    },
+    {
+      "from": "node_04",
+      "to": "node_04",
+      "key": "R",
+      "url": "videos/seg_015.mp4",
+      "title": "R，turn，扭曲中強制轉身",
+      "reversible": true
+    },
+    {
+      "from": "node_05",
+      "to": "node_05",
+      "key": "E",
+      "url": "videos/seg_016.mp4",
+      "title": "E，idle，門列區喘息",
+      "reversible": true
+    },
+    {
+      "from": "node_05",
+      "to": "node_06",
+      "key": "W",
+      "url": "videos/seg_017.mp4",
+      "title": "W，move，門列加速穿越",
+      "reversible": true
+    },
+    {
+      "from": "node_05",
+      "to": "node_05",
+      "key": "S",
+      "url": "videos/seg_018.mp4",
+      "title": "B，back，被門拉扯",
+      "reversible": true
+    },
+    {
+      "from": "node_05",
+      "to": "node_05",
+      "key": "R",
+      "url": "videos/seg_019.mp4",
+      "title": "R，turn，門列中回頭",
+      "reversible": true
+    },
+    {
+      "from": "node_06",
+      "to": "node_06",
+      "key": "E",
+      "url": "videos/seg_020.mp4",
+      "title": "E，idle，黑暗逼近待機",
+      "reversible": true
+    },
+    {
+      "from": "node_06",
+      "to": "node_07",
+      "key": "W",
+      "url": "videos/seg_021.mp4",
+      "title": "W，move，衝入黑暗",
+      "reversible": true
+    },
+    {
+      "from": "node_06",
+      "to": "node_06",
+      "key": "S",
+      "url": "videos/seg_022.mp4",
+      "title": "B，back，黑暗中踉蹌",
+      "reversible": true
+    },
+    {
+      "from": "node_06",
+      "to": "node_06",
+      "key": "R",
+      "url": "videos/seg_023.mp4",
+      "title": "R，turn，黑暗中回頭",
+      "reversible": true
+    },
+    {
+      "from": "node_07",
+      "to": "node_07",
+      "key": "E",
+      "url": "videos/seg_024.mp4",
+      "title": "E，idle，燈滅前的停頓",
+      "reversible": true
+    },
+    {
+      "from": "node_07",
+      "to": "node_08",
+      "key": "W",
+      "url": "videos/seg_025.mp4",
+      "title": "W，move，最後衝刺燈滅",
+      "reversible": true
+    },
+    {
+      "from": "node_07",
+      "to": "node_07",
+      "key": "S",
+      "url": "videos/seg_026.mp4",
+      "title": "B，back，被黑暗推回",
+      "reversible": true
+    },
+    {
+      "from": "node_07",
+      "to": "node_07",
+      "key": "R",
+      "url": "videos/seg_027.mp4",
+      "title": "R，turn，最後回頭",
+      "reversible": true
+    },
+    {
+      "from": "node_08",
+      "to": "node_08",
+      "key": "E",
+      "url": "videos/seg_028.mp4",
+      "title": "E，idle，深黑待機",
+      "reversible": true
+    },
+    {
+      "from": "node_08",
+      "to": "node_09",
+      "key": "W",
+      "url": "videos/seg_029.mp4",
+      "title": "W，move，黑暗中直線奔跑",
+      "reversible": true
+    },
+    {
+      "from": "node_08",
+      "to": "node_08",
+      "key": "S",
+      "url": "videos/seg_030.mp4",
+      "title": "B，back，深黑中推撞",
+      "reversible": true
+    },
+    {
+      "from": "node_08",
+      "to": "node_08",
+      "key": "R",
+      "url": "videos/seg_031.mp4",
+      "title": "R，turn，深黑中轉身",
+      "reversible": true
+    },
+    {
+      "from": "node_09",
+      "to": "node_09",
+      "key": "E",
+      "url": "videos/seg_032.mp4",
+      "title": "E，idle，走廊重複待機",
+      "reversible": true
+    },
+    {
+      "from": "node_09",
+      "to": "node_10",
+      "key": "W",
+      "url": "videos/seg_033.mp4",
+      "title": "W，move，Loop中直線衝刺",
+      "reversible": true
+    },
+    {
+      "from": "node_09",
+      "to": "node_09",
+      "key": "R",
+      "url": "videos/seg_034.mp4",
+      "title": "R，turn，Loop中回頭",
+      "reversible": true
+    },
+    {
+      "from": "node_10",
+      "to": "node_10",
+      "key": "E",
+      "url": "videos/seg_035.mp4",
+      "title": "E，idle，Loop深處待機",
+      "reversible": true
+    },
+    {
+      "from": "node_10",
+      "to": "node_11",
+      "key": "W",
+      "url": "videos/seg_036.mp4",
+      "title": "W，move，Loop加速衝刺",
+      "reversible": true
+    },
+    {
+      "from": "node_11",
+      "to": "node_11",
+      "key": "E",
+      "url": "videos/seg_037.mp4",
+      "title": "E，idle，遠端出現微光",
+      "reversible": true
+    },
+    {
+      "from": "node_11",
+      "to": "node_12",
+      "key": "W",
+      "url": "videos/seg_038.mp4",
+      "title": "W，move，衝向遠端紅光",
+      "reversible": true
+    },
+    {
+      "from": "node_12",
+      "to": "node_12",
+      "key": "E",
+      "url": "videos/seg_039.mp4",
+      "title": "E，idle，紅光變清晰待機",
+      "reversible": true
+    },
+    {
+      "from": "node_12",
+      "to": "node_13",
+      "key": "W",
+      "url": "videos/seg_040.mp4",
+      "title": "W，move，紅光越來越近",
+      "reversible": true
+    },
+    {
+      "from": "node_13",
+      "to": "node_13",
+      "key": "E",
+      "url": "videos/seg_041.mp4",
+      "title": "E，idle，門簾輪廓可見",
+      "reversible": true
+    },
+    {
+      "from": "node_13",
+      "to": "node_14",
+      "key": "W",
+      "url": "videos/seg_042.mp4",
+      "title": "W，move，全力衝向門簾",
+      "reversible": true
+    },
+    {
+      "from": "node_14",
+      "to": "node_14",
+      "key": "E",
+      "url": "videos/seg_043.mp4",
+      "title": "E，idle，門簾就在前方",
+      "reversible": true
+    },
+    {
+      "from": "node_14",
+      "to": "node_15",
+      "key": "W",
+      "url": "videos/seg_044.mp4",
+      "title": "W，move，衝破門簾",
+      "reversible": true
+    },
+    {
+      "from": "node_15",
+      "to": "node_15",
+      "key": "E",
+      "url": "videos/seg_045.mp4",
+      "title": "E，idle，門簾後的黑暗",
+      "reversible": true
+    },
+    {
+      "from": "node_15",
+      "to": "node_16",
+      "key": "W",
+      "url": "videos/seg_046.mp4",
+      "title": "W，move，門簾後繼續奔跑",
+      "reversible": true
+    },
+    {
+      "from": "node_16",
+      "to": "node_16",
+      "key": "E",
+      "url": "videos/seg_047.mp4",
+      "title": "E，idle，終點靜止",
+      "reversible": true
+    },
+    {
+      "from": "node_16",
+      "to": "node_17",
+      "key": "W",
+      "url": "videos/seg_048.mp4",
+      "title": "W，move，最終一步",
+      "reversible": true
+    },
+    {
+      "from": "node_01",
+      "to": "node_02",
+      "key": "E",
+      "url": "videos/seg_049.mp4",
+      "title": "E，奔跑前過渡待機",
+      "reversible": true
+    },
+    {
+      "from": "node_02",
+      "to": "node_03",
+      "key": "E",
+      "url": "videos/seg_050.mp4",
+      "title": "E，加速到扭曲過渡待機",
+      "reversible": true
+    },
+    {
+      "from": "node_03",
+      "to": "node_04",
+      "key": "E",
+      "url": "videos/seg_051.mp4",
+      "title": "E，扭曲到門列過渡待機",
+      "reversible": true
+    },
+    {
+      "from": "node_04",
+      "to": "node_05",
+      "key": "E",
+      "url": "videos/seg_052.mp4",
+      "title": "E，門列到黑暗過渡待機",
+      "reversible": true
+    },
+    {
+      "from": "node_05",
+      "to": "node_06",
+      "key": "E",
+      "url": "videos/seg_053.mp4",
+      "title": "E，黑暗逼近過渡待機",
+      "reversible": true
+    },
+    {
+      "from": "node_06",
+      "to": "node_07",
+      "key": "E",
+      "url": "videos/seg_054.mp4",
+      "title": "E，燈滅段過渡待機",
+      "reversible": true
+    },
+    {
+      "from": "node_07",
+      "to": "node_08",
+      "key": "E",
+      "url": "videos/seg_055.mp4",
+      "title": "E，完全黑暗過渡待機",
+      "reversible": true
+    },
+    {
+      "from": "node_08",
+      "to": "node_09",
+      "key": "E",
+      "url": "videos/seg_056.mp4",
+      "title": "E，深黑過渡待機",
+      "reversible": true
+    },
+    {
+      "from": "node_09",
+      "to": "node_10",
+      "key": "E",
+      "url": "videos/seg_057.mp4",
+      "title": "E，無限Loop過渡待機",
+      "reversible": true
+    },
+    {
+      "from": "node_10",
+      "to": "node_11",
+      "key": "E",
+      "url": "videos/seg_058.mp4",
+      "title": "E，紅光出現前過渡待機",
+      "reversible": true
+    },
+    {
+      "from": "node_11",
+      "to": "node_12",
+      "key": "E",
+      "url": "videos/seg_059.mp4",
+      "title": "E，紅光增強過渡待機",
+      "reversible": true
+    },
+    {
+      "from": "node_12",
+      "to": "node_13",
+      "key": "E",
+      "url": "videos/seg_060.mp4",
+      "title": "E，門簾漸近過渡待機",
+      "reversible": true
+    },
+    {
+      "from": "node_13",
+      "to": "node_14",
+      "key": "E",
+      "url": "videos/seg_061.mp4",
+      "title": "E，衝破前最後停頓",
+      "reversible": true
+    },
+    {
+      "from": "node_02",
+      "to": "node_01",
+      "key": "S",
+      "url": "videos/seg_005.mp4",
+      "title": "W，move，開始奔跑（倒放）",
+      "reverseVideo": true
+    },
+    {
+      "from": "node_04",
+      "to": "node_03",
+      "key": "S",
+      "url": "videos/seg_011.mp4",
+      "title": "W，move，全速進入扭曲區（倒放）",
+      "reverseVideo": true
+    },
+    {
+      "from": "node_09",
+      "to": "node_08",
+      "key": "S",
+      "url": "videos/seg_029.mp4",
+      "title": "W，move，黑暗中直線奔跑（倒放）",
+      "reverseVideo": true
+    },
+    {
+      "from": "node_10",
+      "to": "node_09",
+      "key": "S",
+      "url": "videos/seg_033.mp4",
+      "title": "W，move，Loop中直線衝刺（倒放）",
+      "reverseVideo": true
+    },
+    {
+      "from": "node_11",
+      "to": "node_10",
+      "key": "S",
+      "url": "videos/seg_036.mp4",
+      "title": "W，move，Loop加速衝刺（倒放）",
+      "reverseVideo": true
+    },
+    {
+      "from": "node_12",
+      "to": "node_11",
+      "key": "S",
+      "url": "videos/seg_038.mp4",
+      "title": "W，move，衝向遠端紅光（倒放）",
+      "reverseVideo": true
+    },
+    {
+      "from": "node_13",
+      "to": "node_12",
+      "key": "S",
+      "url": "videos/seg_040.mp4",
+      "title": "W，move，紅光越來越近（倒放）",
+      "reverseVideo": true
+    },
+    {
+      "from": "node_14",
+      "to": "node_13",
+      "key": "S",
+      "url": "videos/seg_042.mp4",
+      "title": "W，move，全力衝向門簾（倒放）",
+      "reverseVideo": true
+    },
+    {
+      "from": "node_15",
+      "to": "node_14",
+      "key": "S",
+      "url": "videos/seg_044.mp4",
+      "title": "W，move，衝破門簾（倒放）",
+      "reverseVideo": true
+    },
+    {
+      "from": "node_16",
+      "to": "node_15",
+      "key": "S",
+      "url": "videos/seg_046.mp4",
+      "title": "W，move，門簾後繼續奔跑（倒放）",
+      "reverseVideo": true
+    },
+    {
+      "from": "node_17",
+      "to": "node_16",
+      "key": "S",
+      "url": "videos/seg_048.mp4",
+      "title": "W，move，最終一步（倒放）",
+      "reverseVideo": true
+    }
+  ]
+};
+const tBar=document.getElementById('tBar')
+const nodeIdBar=document.getElementById('nodeIdBar')
+const emptyMsg=document.getElementById('emptyMsg')
+const btns={}
+document.querySelectorAll('.wbtn[data-k]').forEach(b=>{if(!b.disabled)btns[b.dataset.k]=b})
+
+// ── 節點狀態機 ──
+// 玩家目前站在哪個節點；按下方向鍵時，去 GRAPH.edges 找
+// 「from===目前節點 且 key===按的鍵」的那一條邊，播放並把
+// 目前節點更新成邊的終點。找不到就顯示「這裡還沒有記憶」。
+let curNode=GRAPH.start
+
+function findEdge(from,key){
+  return GRAPH.edges.find(e=>e.from===from&&e.key===key)
+}
+
+function refreshButtons(){
+  Object.entries(btns).forEach(([k,b])=>{
+    const has=!!findEdge(curNode,k)
+    b.disabled=!has||(gamePhase==='retreat'&&k!=='E')||(gamePhase==='end'&&k!=='E')
+  })
+  nodeIdBar.textContent=curNode
+}
+
+// ── 遊戲狀態 ──
+let gamePhase='normal' // normal / detour / retreat / end
+let detourCount=0
+let detourTriggered=false
+let isAutoPlaying=false
+let noren1stVisit=true // 第一次到門簾=迂迴，第二次=結局
+
+// 節點深度（W方向）
+const nodeDepth={
+  'node_00':0,'node_01':1,'node_02':2,'node_03':3,'node_04':4,
+  'node_05':5,'node_06':6,'node_07':7,'node_08':8,'node_09':9,
+  'node_10':10,'node_11':11,'node_12':12,'node_13':13,'node_14':14,
+  'node_15':15,'node_16':16,'node_17':17,'node_18':18,'node_19':19
+}
+
+// 自動播放序列（R迂迴 or 強制退回）
+function autoPlaySeq(seq, onDone, speed=1.0){
+  if(isAutoPlaying)return
+  isAutoPlaying=true
+  let i=0
+  function next(){
+    if(i>=seq.length){isAutoPlaying=false;if(onDone)onDone();return}
+    const k=seq[i++]
+    const edge=findEdge(curNode,k)
+    if(!edge){next();return}
+    playAuto(k,next,speed)
+  }
+  next()
+}
+
+// 自動播放單段，播完執行 callback
+function playAuto(key, onDone, speed=1.0){
+  const edge=findEdge(curNode,key)
+  if(!edge){if(onDone)onDone();return}
+  emptyMsg.style.display='none'
+  tBar.textContent=edge.title
+  curKey=key
+  crossfadeTo(edge,{
+    loop:false,
+    onEnded:()=>{
+      curNode=edge.to
+      refreshButtons()
+      if(onDone)onDone()
+    }
+  })
+  // 套用速度
+  const activeVid=layers[activeIdx]
+  if(activeVid) activeVid.playbackRate=speed
+  curNode=edge.to
+  refreshButtons()
+}
+
+// 隨機迂迴：R → B → B → R → 繼續
+function triggerDetour(onDone){
+  gamePhase='detour'
+  detourCount++
+  const bCount=2+Math.floor(Math.random()*2) // 2~3段B
+  const seq=['R',...Array(bCount).fill('B'),'R']
+  startFlicker(seq.length*1500) // 閃爍持續整個迂迴過程
+  autoPlaySeq(seq,()=>{
+    stopFlicker()
+    gamePhase='normal'
+    if(onDone)onDone()
+  })
+}
+
+// 強制退回到 node_00，然後結局
+// 第一次到門簾：強制拉回 node_02，快速播 B
+function triggerNorenDetour(){
+  gamePhase='retreat' // 玩家無法操作
+  refreshButtons()
+  startFlicker(99999)
+  // 快速連 B 直到回到 node_02
+  function stepBack(){
+    const depth=nodeDepth[curNode]||0
+    if(depth<=2||!findEdge(curNode,'B')){
+      // 到 node_02 了，釋放控制讓玩家繼續
+      stopFlicker()
+      gamePhase='normal'
+      refreshButtons()
+      // 播 idle
+      const idleEdge=findEdge(curNode,'E')
+      if(idleEdge){curKey='E';tBar.textContent=idleEdge.title;crossfadeTo(idleEdge,{loop:true})}
+      return
+    }
+    playAuto('B', stepBack, 2.5) // B 段加速 2.5x
+  }
+  stepBack()
+}
+
+function triggerRetreat(){
+  gamePhase='retreat'
+  refreshButtons()
+  startFlicker(99999) // 退回全程閃爍
+  function stepBack(){
+    if(curNode==='node_00'||!findEdge(curNode,'B')){
+      stopFlicker()
+      showEnding()
+      return
+    }
+    playAuto('B', stepBack, 3.0) // 最終退回更快
+  }
+  stepBack()
+}
+
+// 閃爍效果（迂迴時觸發）
+function startFlicker(duration=3000){
+  const stage=document.querySelector('.stage')
+  const overlay=document.createElement('div')
+  overlay.id='flickerLayer'
+  overlay.style.cssText='position:absolute;inset:0;z-index:50;background:black;pointer-events:none;opacity:0;transition:opacity 0.05s'
+  stage.appendChild(overlay)
+  let start=Date.now()
+  function flick(){
+    if(Date.now()-start>duration){
+      overlay.remove()
+      return
+    }
+    overlay.style.opacity=Math.random()<0.3?(Math.random()*0.7+0.1).toFixed(2):'0'
+    setTimeout(flick, 50+Math.random()*150)
+  }
+  flick()
+}
+
+function stopFlicker(){
+  const f=document.getElementById('flickerLayer')
+  if(f)f.remove()
+}
+
+// 結局畫面
+function showEnding(){
+  gamePhase='end'
+  refreshButtons()
+  const overlay=document.getElementById('endOverlay')
+  const txt=document.getElementById('endText')
+  overlay.style.display='flex'
+  // 逐字顯示
+  const msg='你覺得能⋯\n你能逃得了?'
+  let i=0
+  txt.textContent=''
+  const timer=setInterval(()=>{
+    if(i>=msg.length){clearInterval(timer);return}
+    txt.textContent+=msg[i++]
+  },120)
+}
+
+// ── 雙層 video 交叉淡化（JS 驅動，opacity 數值同步給錄影用的 canvas）──
+const layers=[document.getElementById('vidA'),document.getElementById('vidB')]
+const op=[1,0] // layers[0]/[1] 目前的不透明度，錄影 canvas 會讀這個
+layers.forEach((v,i)=>{v.style.opacity=op[i]})
+let activeIdx=0
+let curKey=null
+let fadeRaf=null
+
+function animateFade(fromIdx,toIdx,duration=450){
+  if(fadeRaf)cancelAnimationFrame(fadeRaf)
+  const t0=performance.now()
+  function step(t){
+    const p=Math.min(1,(t-t0)/duration)
+    op[toIdx]=p;op[fromIdx]=1-p
+    layers[toIdx].style.opacity=op[toIdx]
+    layers[fromIdx].style.opacity=op[fromIdx]
+    if(p<1){fadeRaf=requestAnimationFrame(step)}
+    else{layers[fromIdx].pause();fadeRaf=null}
+  }
+  fadeRaf=requestAnimationFrame(step)
+}
+
+// 反向播放：HTML5 video 對負的 playbackRate 支援不穩定，
+// 改用 rAF 手動把 currentTime 往回撥，模擬倒放。
+let reverseRaf=null
+function stopReverse(){if(reverseRaf){cancelAnimationFrame(reverseRaf);reverseRaf=null}}
+function playReverse(v,onDone){
+  stopReverse()
+  v.pause()
+  v.currentTime=Math.max(0,v.duration-0.05)
+  let last=performance.now()
+  function step(t){
+    const dt=(t-last)/1000;last=t
+    v.currentTime=Math.max(0,v.currentTime-dt)
+    if(v.currentTime<=0.05){reverseRaf=null;if(onDone)onDone();return}
+    reverseRaf=requestAnimationFrame(step)
+  }
+  reverseRaf=requestAnimationFrame(step)
+}
+
+function crossfadeTo(edge,{loop=false,onEnded=null}={}){
+  stopReverse()
+  const nextIdx=1-activeIdx
+  const cur=layers[activeIdx],next=layers[nextIdx]
+
+  next.loop=loop&&!edge.reverseVideo
+  next.onended=null
+  next.src=edge.url
+
+  const doSwap=()=>{
+    if(edge.reverseVideo){
+      next.pause()
+      playReverse(next,onEnded||null)
+    }else{
+      next.currentTime=0
+      // W 條目根據節點深度設播放速度，越後面越快
+      if(edge.key==='W'){
+        const speedMap={
+          'node_00→node_01':1.0,
+          'node_01→node_02':1.5,
+          'node_02→node_03':2.0,
+          'node_03→node_04':2.2,
+          'node_04→node_05':2.4,
+          'node_05→node_06':2.6,
+          'node_06→node_07':2.8,
+          'node_07→node_08':3.0,
+          'node_08→node_09':3.2,
+          'node_09→node_10':3.4,
+          'node_10→node_11':3.6,
+          'node_11→node_12':3.8,
+          'node_12→node_13':4.0,
+          'node_13→node_14':4.0,
+          'node_14→node_15':4.0,
+          'node_15→node_16':4.0,
+          'node_16→node_17':4.0,
+          'node_17→node_18':4.0,
+          'node_18→node_19':4.0,
+        }
+        const edgeKey=`${edge.from}→${edge.to}`
+        next.playbackRate=speedMap[edgeKey]||1.0
+      } else {
+        next.playbackRate=1.0
+      }
+      next.play().catch(()=>{})
+      if(onEnded)next.onended=onEnded
+    }
+    animateFade(activeIdx,nextIdx)
+    activeIdx=nextIdx
+  }
+
+  if(next.readyState>=2){doSwap()}
+  else{next.addEventListener('canplay',doSwap,{once:true})}
+}
+
+let playCooldown=false // 防止按住W連續觸發
+function play(key){
+  if(playCooldown&&key==='W')return // W 冷卻中
+  const edge=findEdge(curNode,key)
+  if(!edge){
+    emptyMsg.style.display='flex'
+    tBar.textContent='這個方向還沒有記憶…'
+    return
+  }
+  emptyMsg.style.display='none'
+  tBar.textContent=edge.title
+  curKey=key
+  const isIdleLoop=(edge.from===edge.to&&key==='E')
+
+  // R 鍵隨機左右轉
+  if(key==='R'&&Math.random()<0.5){
+    // 找 turn_left 版本（用 reverseVideo 反轉同一段影片）
+    edge.reverseVideo=!edge.reverseVideo
+  }
+
+  crossfadeTo(edge,{
+    loop:isIdleLoop,
+    onEnded: isIdleLoop ? null : ()=>{
+      if(curKey!==key)return
+      curNode=edge.to
+      refreshButtons()
+
+      // W 播完啟動冷卻，防止按住不放連飛
+      if(key==='W'){
+        playCooldown=true
+        setTimeout(()=>{playCooldown=false},500)
+      }
+
+      // W 條目：判斷是否觸發迂迴或門簾結局
+      if(key==='W'&&gamePhase==='normal'){
+        const depth=nodeDepth[curNode]||0
+        // node_03~node_08 之間隨機觸發最多2次迂迴
+        const shouldDetour=depth>=2&&depth<=10&&detourCount<4&&Math.random()<0.7
+        // node_14 觸發門簾
+        const atNoren=curNode==='node_14'||depth>=14
+
+        if(atNoren){
+          if(noren1stVisit){
+            // 第一次：強制迂迴回 node_02
+            noren1stVisit=false
+            setTimeout(()=>triggerNorenDetour(),800)
+          } else {
+            // 第二次：直接退回結局
+            setTimeout(()=>triggerRetreat(),800)
+          }
+          return
+        } else if(shouldDetour&&!isAutoPlaying){
+          triggerDetour(()=>{
+            // 迂迴結束後回 idle
+            const idleEdge=findEdge(curNode,'E')
+            if(idleEdge){curKey='E';tBar.textContent=idleEdge.title;crossfadeTo(idleEdge,{loop:true})}
+          })
+          return
+        }
+      }
+
+      const idleEdge=findEdge(curNode,'E')
+      if(idleEdge){
+        curKey='E'
+        tBar.textContent=idleEdge.title
+        crossfadeTo(idleEdge,{loop:true})
+      }
+    }
+  })
+
+  if(!isIdleLoop){
+    // 立即更新節點狀態，讓按鈕可用性即時反映（不用等播完）
+    curNode=edge.to
+    refreshButtons()
+  }
+}
+
+Object.entries(btns).forEach(([k,b])=>{
+  b.addEventListener('click',()=>{
+    if(gamePhase==='detour'||gamePhase==='retreat'||gamePhase==='end')return
+    tryAutoStartBgm();play(k)
+  })
+})
+window.addEventListener('keydown',e=>{
+  const k=e.key.toUpperCase()
+  if(gamePhase==='detour'||gamePhase==='retreat'||gamePhase==='end'){
+    if(k==='E')tryAutoStartBgm() // 只有E鍵在結局還能觸發bgm
+    return // 其他全部無效
+  }
+  if(btns[k]&&!btns[k].disabled){tryAutoStartBgm();play(k)}
+})
+
+// ── 錄影（canvas 合成兩層 video 的即時畫面，含交叉淡化）──
+const canvas=document.getElementById('recCanvas')
+const ctx=canvas.getContext('2d')
+canvas.width=480;canvas.height=832
+let mediaRecorder=null
+let recChunks=[]
+let drawRaf=null
+
+function drawFrame(){
+  ctx.clearRect(0,0,canvas.width,canvas.height)
+  layers.forEach((v,i)=>{
+    if(op[i]<=0||!v.videoWidth)return
+    ctx.globalAlpha=op[i]
+    ctx.drawImage(v,0,0,canvas.width,canvas.height)
+  })
+  ctx.globalAlpha=1
+  drawRaf=requestAnimationFrame(drawFrame)
+}
+
+function pickMime(){
+  const cands=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm']
+  for(const c of cands){if(MediaRecorder.isTypeSupported(c))return c}
+  return ''
+}
+
+const recBtn=document.getElementById('recBtn')
+const recLabel=document.getElementById('recLabel')
+const recErr=document.getElementById('recErr')
+let isRecording=false
+let recTimerInt=null
+let recStartTime=0
+
+function fmtSec(s){const m=Math.floor(s/60);const r=s%60;return `${String(m).padStart(2,'0')}:${String(r).padStart(2,'0')}`}
+
+recBtn.addEventListener('click',()=>{
+  recErr.textContent=''
+  if(!isRecording){
+    try{
+      if(typeof MediaRecorder==='undefined'){
+        recErr.textContent='這個瀏覽器不支援錄影（MediaRecorder API）。建議用 Chrome 或 Edge。'
+        return
+      }
+      drawFrame()
+      const stream=canvas.captureStream(30)
+      const mime=pickMime()
+      recChunks=[]
+      mediaRecorder=new MediaRecorder(stream,mime?{mimeType:mime}:undefined)
+      mediaRecorder.ondataavailable=ev=>{if(ev.data.size>0)recChunks.push(ev.data)}
+      mediaRecorder.onstop=()=>{
+        if(!recChunks.length||recChunks.reduce((a,c)=>a+c.size,0)===0){
+          recErr.textContent='錄到的檔案是空的，通常是影片跨網域被瀏覽器擋住畫面內容。建議改用「📦 匯出可攜包(ZIP)」，把影片存成本機檔案後再錄影就不會有這個問題。'
+          return
+        }
+        const blob=new Blob(recChunks,{type:'video/webm'})
+        const a=document.createElement('a')
+        a.href=URL.createObjectURL(blob)
+        a.download=`zibai_recording_${Date.now()}.webm`
+        a.click()
+        URL.revokeObjectURL(a.href)
+      }
+      mediaRecorder.onerror=ev=>{
+        recErr.textContent='錄影發生錯誤：'+(ev.error?ev.error.name+' '+ev.error.message:'未知錯誤')
+        isRecording=false;recBtn.classList.remove('on');recLabel.textContent='錄影'
+        if(recTimerInt){clearInterval(recTimerInt);recTimerInt=null}
+      }
+      mediaRecorder.start()
+      isRecording=true
+      recBtn.classList.add('on')
+      recStartTime=Date.now()
+      recLabel.textContent='00:00'
+      recTimerInt=setInterval(()=>{
+        recLabel.textContent=fmtSec(Math.floor((Date.now()-recStartTime)/1000))
+      },500)
+    }catch(err){
+      // 最常見原因：canvas.captureStream() 因為影片是跨網域來源（ComfyUI）
+      // 而拋出 SecurityError（畫面被判定為「不乾淨」，無法擷取像素）。
+      // 這裡不能默默失敗，一定要讓使用者看到原因。
+      if(err.name==='SecurityError'){
+        recErr.textContent='錄影被瀏覽器擋下（跨網域影片無法錄製）。請改用「📦 匯出可攜包(ZIP)」，把影片打包成本機檔案後再開啟錄影就能正常運作。'
+      }else{
+        recErr.textContent='錄影啟動失敗：'+(err.name||'')+' '+(err.message||err)
+      }
+    }
+  }else{
+    if(mediaRecorder)mediaRecorder.stop()
+    if(drawRaf){cancelAnimationFrame(drawRaf);drawRaf=null}
+    if(recTimerInt){clearInterval(recTimerInt);recTimerInt=null}
+    isRecording=false
+    recBtn.classList.remove('on')
+    recLabel.textContent='錄影'
+  }
+})
+
+// ── 背景音樂：瀏覽器擋自動有聲播放，所以先靜音待命，
+// 使用者第一次點擊/按鍵之後才真正播放並淡入音量。
+const bgm=document.getElementById('bgm')
+const bgmBtn=document.getElementById('bgmBtn')
+const BGM_VOL=0.35 // 音樂音量上限，別蓋過畫面情緒，可自行調整 0~1
+let bgmOn=false
+let bgmFadeRaf=null
+
+function fadeBgm(target,duration=800){
+  if(bgmFadeRaf)cancelAnimationFrame(bgmFadeRaf)
+  const start=bgm.volume,t0=performance.now()
+  function step(t){
+    const p=Math.min(1,(t-t0)/duration)
+    const v=start+(target-start)*p
+    bgm.volume=Math.max(0,Math.min(1,v)) // 浮點數誤差可能讓 v 微幅超出 [0,1]，volume 屬性不接受超界值會直接丟例外，這裡強制夾住
+    if(p<1){bgmFadeRaf=requestAnimationFrame(step)}
+    else{bgmFadeRaf=null;if(target===0)bgm.pause()}
+  }
+  bgmFadeRaf=requestAnimationFrame(step)
+}
+
+function setBgm(on){
+  bgmOn=on
+  bgmBtn.classList.toggle('on',on)
+  bgmBtn.textContent=on?'🔊':'🔇'
+  if(on){
+    bgm.volume=0
+    bgm.play().catch(()=>{}) // 找不到 music/bgm.mp3 時安靜失敗，不擋主流程
+    fadeBgm(BGM_VOL)
+  }else{
+    fadeBgm(0)
+  }
+}
+
+bgmBtn.addEventListener('click',()=>setBgm(!bgmOn))
+
+// 使用者第一次跟頁面互動（點方向鍵或按鍵盤）時，順便嘗試起播音樂，
+// 這樣不用額外多點一次「音樂」按鈕，體驗更順；使用者仍可隨時點按鈕關掉。
+let bgmAutoTried=false
+function tryAutoStartBgm(){
+  if(bgmAutoTried)return
+  bgmAutoTried=true
+  setBgm(true)
+}
+
+// 開場：站在起始節點，先播待機（如果有的話）
+refreshButtons()
+if(findEdge(curNode,'E')){
+  play('E')
+}else{
+  emptyMsg.style.display='flex'
+  tBar.textContent='尚未生成待機畫面'
+  emptyMsg.textContent='這個節點還沒有原地待機的影片，請按下方任一個亮起的方向鍵開始探索'
+}
+</script>
+</body>
+</html>
