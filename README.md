@@ -1,4 +1,4 @@
-# Horror Corridor V2
+# Horror Corridor V3
 
 嚴格第一人稱視角的生存恐怖世界探索 Demo，畫面中沒有任何角色、身體或手部——你就是那雙眼睛。用 LingBot-World 生成的場景影片串接而成，在異化成無限惡夢長廊的走廊裡移動、轉身、待機。
 
