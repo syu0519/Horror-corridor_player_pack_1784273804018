@@ -42,8 +42,8 @@ body{background:var(--bg);color:var(--t);font-family:var(--fn);min-height:100vh;
     <div class="title-bar"><span id="tBar">－</span><span class="node-id" id="nodeIdBar"></span></div>
     <button class="rec-btn" id="recBtn"><span class="dot"></span><span id="recLabel">錄影</span></button>
     <button class="bgm-btn" id="bgmBtn" title="背景音樂">🔇</button>
-    <video id="vidA" playsinline muted crossorigin="anonymous"></video>
-    <video id="vidB" playsinline muted crossorigin="anonymous"></video>
+    <video id="vidA" playsinline webkit-playsinline muted></video>
+    <video id="vidB" playsinline webkit-playsinline muted></video>
     <canvas id="recCanvas" style="display:none"></canvas>
     <div class="empty" id="emptyMsg" style="display:none">這個方向還沒有記憶…</div>
     <div class="grid">
@@ -882,6 +882,8 @@ function crossfadeTo(edge,{loop=false,onEnded=null}={}){
   next.src=edge.url
 
   const doSwap=()=>{
+    next.setAttribute('playsinline','')
+    next.setAttribute('webkit-playsinline','')
     if(edge.reverseVideo){
       next.pause()
       playReverse(next,onEnded||null)
@@ -1154,6 +1156,12 @@ function tryAutoStartBgm(){
   if(bgmAutoTried)return
   bgmAutoTried=true
   setBgm(true)
+  // iOS Safari：第一次 user gesture 時解鎖 video 播放
+  layers.forEach(v=>{
+    v.load()
+    const p=v.play()
+    if(p)p.then(()=>v.pause()).catch(()=>{})
+  })
 }
 
 // 開場：站在起始節點，先播待機（如果有的話）
